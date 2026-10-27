@@ -274,34 +274,55 @@ if uploaded is not None:
     st.sidebar.success(f"Saved as `{dest.name}` — select it below and click Refresh.")
 
 csv_files = sorted(core.IMPORT_DIR.glob("*.csv"))
-default_idx = next(
-    (i for i, p in enumerate(csv_files) if p.name == core.BUILDINGS_CSV.name), 0
-)
-selected_csv = st.sidebar.selectbox(
-    "Buildings CSV to use",
-    options=csv_files,
-    index=default_idx,
-    format_func=lambda p: p.name,
-)
 
-# Validate columns before allowing a run against this file.
-try:
-    _preview = pd.read_csv(selected_csv, nrows=5)
-    _missing = REQUIRED_BUILDING_COLUMNS - set(_preview.columns)
-except Exception as exc:
-    _preview, _missing = None, None
-    st.sidebar.error(f"Could not read `{selected_csv.name}`: {exc}")
+if not csv_files:
+    # No buildings data at all yet — e.g. a fresh Streamlit Cloud deploy
+    # where the `buildings_csv` secret isn't set (or is empty), so
+    # _bootstrap_data_from_secrets() had nothing to restore. Don't let the
+    # selectbox/read_csv calls below run against `None` (they'd crash with a
+    # confusing AttributeError) — ask for a file instead.
+    selected_csv, _preview, _missing = None, None, None
+    st.sidebar.warning(
+        "No buildings CSV found. Upload one above, or (for this deployment) "
+        "set the `buildings_csv` secret in the app's Settings → Secrets."
+    )
+else:
+    default_idx = next(
+        (i for i, p in enumerate(csv_files) if p.name == core.BUILDINGS_CSV.name), 0
+    )
+    selected_csv = st.sidebar.selectbox(
+        "Buildings CSV to use",
+        options=csv_files,
+        index=default_idx,
+        format_func=lambda p: p.name,
+    )
 
-if _missing:
-    st.sidebar.error(f"`{selected_csv.name}` is missing required column(s): {', '.join(sorted(_missing))}")
-elif _preview is not None:
-    with st.sidebar.expander(f"Preview `{selected_csv.name}`"):
-        st.dataframe(_preview, hide_index=True)
+    # Validate columns before allowing a run against this file.
+    try:
+        _preview = pd.read_csv(selected_csv, nrows=5)
+        _missing = REQUIRED_BUILDING_COLUMNS - set(_preview.columns)
+    except Exception as exc:
+        _preview, _missing = None, None
+        st.sidebar.error(f"Could not read `{selected_csv.name}`: {exc}")
+
+    if _missing:
+        st.sidebar.error(f"`{selected_csv.name}` is missing required column(s): {', '.join(sorted(_missing))}")
+    elif _preview is not None:
+        with st.sidebar.expander(f"Preview `{selected_csv.name}`"):
+            st.dataframe(_preview, hide_index=True)
 
 if st.sidebar.button(
-    "Refresh from Hamburg (live, ~30s)", type="primary", disabled=bool(_missing)
+    "Refresh from Hamburg (live, ~30s)", type="primary", disabled=selected_csv is None or bool(_missing)
 ):
     run_live_refresh(selected_csv)
+
+if not core.OUTPUT_XLSX.exists():
+    st.error(
+        "No results yet — there's no buildings CSV to analyze. Upload one in "
+        "the sidebar (or configure the `buildings_csv` secret for this "
+        "deployment), then click **Refresh from Hamburg** to generate results."
+    )
+    st.stop()
 
 df = load_results()
 

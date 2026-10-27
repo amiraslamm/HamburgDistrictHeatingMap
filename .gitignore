@@ -1,0 +1,10 @@
+# Real building data (addresses, operators) — never commit. Restored on
+# Streamlit Cloud from secrets (see streamlit_app.py: _bootstrap_data_from_secrets)
+# or regenerated locally via the "Refresh from Hamburg" button.
+import/
+export/
+
+__pycache__/
+*.pyc
+.DS_Store
+.streamlit/secrets.toml

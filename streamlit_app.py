@@ -36,17 +36,22 @@ def _bootstrap_data_from_secrets() -> None:
     import/ and export/ are gitignored (real building addresses/operators
     shouldn't live in the repo), so a fresh deploy (e.g. Streamlit Community
     Cloud) starts with neither the buildings CSV nor the precomputed Excel on
-    disk. Restore the buildings CSV from Streamlit secrets (base64, set via
-    the app's "Secrets" settings — never committed to git) if it's missing,
-    then run the live analysis once to produce the output Excel.
+    disk. Restore the buildings CSV from Streamlit secrets (plain CSV text,
+    set via the app's "Secrets" settings — never committed to git) if it's
+    missing, then run the live analysis once to produce the output Excel.
+
+    Plain text (not base64) deliberately — a single ~108,000-character
+    unbroken base64 line proved too fragile to paste reliably through the
+    secrets textbox (silent truncation -> binascii.Error on decode). The CSV
+    itself is plain multi-line UTF-8 text with no `'''`, so it pastes cleanly
+    as a TOML literal multi-line string.
     """
     core.IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     if not core.BUILDINGS_CSV.exists():
-        b64 = st.secrets.get("buildings_csv_b64")
-        if not b64:
+        csv_text = st.secrets.get("buildings_csv")
+        if not csv_text:
             return
-        import base64
-        core.BUILDINGS_CSV.write_bytes(base64.b64decode(b64))
+        core.BUILDINGS_CSV.write_text(csv_text, encoding="utf-8")
 
     if not core.OUTPUT_XLSX.exists() and core.BUILDINGS_CSV.exists():
         with st.spinner("First run: fetching Hamburg's live heat-planning data (~30-40s)..."):
